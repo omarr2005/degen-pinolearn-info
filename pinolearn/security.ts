@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Security utilities for protecting against malicious content
  */
 
@@ -167,12 +167,12 @@ export function checkSecurityRateLimit(options: SecurityRateLimitOptions): {
 export const CSP_HEADERS = {
   'Content-Security-Policy': [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://challenges.cloudflare.com https://cdn.paddle.com https://sandbox-cdn.paddle.com https://js.paddle.com https://*.clerk.com https://clerk.pinolearn.com https://accounts.pinolearn.com https://*.posthog.com",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://challenges.cloudflare.com https://*.clerk.com https://clerk.pinolearn.com https://accounts.pinolearn.com https://*.posthog.com",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https: blob:",
     "font-src 'self' data:",
-    "connect-src 'self' https://*.clerk.com https://*.clerk.accounts.dev https://clerk.pinolearn.com https://accounts.pinolearn.com https://*.supabase.co https://api.openrouter.ai https://cdn.paddle.com https://sandbox-cdn.paddle.com https://*.posthog.com https://us.i.posthog.com https://us.posthog.com https://eu.posthog.com https://app.posthog.com wss://*.supabase.co",
-    "frame-src 'self' https://challenges.cloudflare.com https://cdn.paddle.com https://checkout.paddle.com https://buy.paddle.com https://*.clerk.com https://accounts.pinolearn.com https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com",
+    "connect-src 'self' https://*.clerk.com https://*.clerk.accounts.dev https://clerk.pinolearn.com https://accounts.pinolearn.com https://*.supabase.co https://api.openrouter.ai https://*.posthog.com https://us.i.posthog.com https://us.posthog.com https://eu.posthog.com https://app.posthog.com wss://*.supabase.co https://*.lemonsqueezy.com",
+    "frame-src 'self' https://challenges.cloudflare.com https://*.clerk.com https://accounts.pinolearn.com https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://*.lemonsqueezy.com",
     "manifest-src 'self'",
   ].join('; '),
   'X-Frame-Options': 'DENY',

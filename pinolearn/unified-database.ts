@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unified Database Client with Automatic Failover
  *
  * Architecture:
@@ -36,14 +36,14 @@ let azureClient: PrismaClient | null = null;
 
 function createSupabaseClient(): PrismaClient | null {
   if (!process.env.DATABASE_URL) {
-    console.warn('[UNIFIED-DB] 🟡 DATABASE_URL not configured (Supabase)');
+    console.warn('[UNIFIED-DB] ðŸŸ¡ DATABASE_URL not configured (Supabase)');
     return null;
   }
 
   try {
-    console.log('[UNIFIED-DB] 🔵 Creating Supabase PostgreSQL client...');
+    console.log('[UNIFIED-DB] ðŸ”µ Creating Supabase PostgreSQL client...');
     console.log(
-      '[UNIFIED-DB] 📍 Supabase URL:',
+      '[UNIFIED-DB] ðŸ“ Supabase URL:',
       process.env.DATABASE_URL.split('@')[1]?.split('/')[0] || 'HIDDEN'
     );
 
@@ -59,7 +59,7 @@ function createSupabaseClient(): PrismaClient | null {
       errorFormat: 'minimal',
     });
 
-    // 🔥 CRITICAL: Log all database operations
+    // ðŸ”¥ CRITICAL: Log all database operations
     client.$on('query', (e: any) => {
       console.log('[SUPABASE-QUERY]', {
         query: e.query.substring(0, 100),
@@ -80,10 +80,10 @@ function createSupabaseClient(): PrismaClient | null {
       console.warn('[SUPABASE-WARN]', e.message);
     });
 
-    console.log('[UNIFIED-DB] ✅ Supabase client created successfully');
+    console.log('[UNIFIED-DB] [OK] Supabase client created successfully');
     return client;
   } catch (error) {
-    console.error('[UNIFIED-DB] ❌ Failed to create Supabase client:', {
+    console.error('[UNIFIED-DB] âŒ Failed to create Supabase client:', {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
       env_url_exists: !!process.env.DATABASE_URL,
@@ -95,14 +95,14 @@ function createSupabaseClient(): PrismaClient | null {
 
 function createAzureClient(): PrismaClient | null {
   if (!process.env.AZURE_DATABASE_URL) {
-    console.warn('[UNIFIED-DB] 🟡 AZURE_DATABASE_URL not configured');
+    console.warn('[UNIFIED-DB] ðŸŸ¡ AZURE_DATABASE_URL not configured');
     return null;
   }
 
   try {
-    console.log('[UNIFIED-DB] 🔷 Creating Azure PostgreSQL client...');
+    console.log('[UNIFIED-DB] ðŸ”· Creating Azure PostgreSQL client...');
     console.log(
-      '[UNIFIED-DB] 📍 Azure URL:',
+      '[UNIFIED-DB] ðŸ“ Azure URL:',
       process.env.AZURE_DATABASE_URL.split('@')[1]?.split('/')[0] || 'HIDDEN'
     );
 
@@ -118,7 +118,7 @@ function createAzureClient(): PrismaClient | null {
       errorFormat: 'minimal',
     });
 
-    // 🔥 CRITICAL: Log all database operations
+    // ðŸ”¥ CRITICAL: Log all database operations
     client.$on('query', (e: any) => {
       console.log('[AZURE-QUERY]', {
         query: e.query.substring(0, 100),
@@ -139,10 +139,10 @@ function createAzureClient(): PrismaClient | null {
       console.warn('[AZURE-WARN]', e.message);
     });
 
-    console.log('[UNIFIED-DB] ✅ Azure client created successfully');
+    console.log('[UNIFIED-DB] [OK] Azure client created successfully');
     return client;
   } catch (error) {
-    console.error('[UNIFIED-DB] ❌ Failed to create Azure client:', {
+    console.error('[UNIFIED-DB] âŒ Failed to create Azure client:', {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
       env_url_exists: !!process.env.AZURE_DATABASE_URL,
@@ -165,7 +165,7 @@ function recordFailure(provider: 'supabase' | 'azure') {
   if (health.failures >= FAILURE_THRESHOLD) {
     health.isCircuitOpen = true;
     console.warn(
-      `[UNIFIED-DB] 🔴 Circuit breaker OPEN for ${provider} (${health.failures} failures)`
+      `[UNIFIED-DB] ðŸ”´ Circuit breaker OPEN for ${provider} (${health.failures} failures)`
     );
   }
 }
@@ -175,7 +175,7 @@ function isProviderAvailable(provider: 'supabase' | 'azure'): boolean {
 
   // Check if circuit should be reset
   if (health.isCircuitOpen && Date.now() - health.lastFailure > CIRCUIT_RESET_TIME) {
-    console.log(`[UNIFIED-DB] 🔄 Circuit breaker RESET for ${provider} (trying again)`);
+    console.log(`[UNIFIED-DB] ðŸ”„ Circuit breaker RESET for ${provider} (trying again)`);
     health.failures = 0;
     health.isCircuitOpen = false;
   }
@@ -186,7 +186,7 @@ function isProviderAvailable(provider: 'supabase' | 'azure'): boolean {
 function recordSuccess(provider: 'supabase' | 'azure') {
   const health = providerHealth[provider];
   if (health.failures > 0) {
-    console.log(`[UNIFIED-DB] ✅ ${provider} recovered (resetting failure count)`);
+    console.log(`[UNIFIED-DB] [OK] ${provider} recovered (resetting failure count)`);
     health.failures = 0;
   }
   health.isCircuitOpen = false;
@@ -204,7 +204,7 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
 
 /**
  * Unified Database Client Proxy
- * Automatically routes queries to available database (Supabase → Azure)
+ * Automatically routes queries to available database (Supabase â†’ Azure)
  */
 class UnifiedDatabaseClient {
   private get activeClient(): PrismaClient {
@@ -215,13 +215,13 @@ class UnifiedDatabaseClient {
 
     // Fallback to Azure (reliable, paid)
     if (azureClient && isProviderAvailable('azure')) {
-      console.warn('[UNIFIED-DB] ⚠️ Using Azure PostgreSQL (Supabase unavailable)');
+      console.warn('[UNIFIED-DB] âš ï¸ Using Azure PostgreSQL (Supabase unavailable)');
       return azureClient;
     }
 
     // Both failed - use Supabase anyway (will throw error)
     if (supabaseClient) {
-      console.error('[UNIFIED-DB] 🔴 Both databases unavailable, trying Supabase anyway');
+      console.error('[UNIFIED-DB] ðŸ”´ Both databases unavailable, trying Supabase anyway');
       return supabaseClient;
     }
 
@@ -241,18 +241,18 @@ class UnifiedDatabaseClient {
         recordSuccess('supabase');
         return result;
       } catch (error) {
-        console.error('[UNIFIED-DB] ❌ Supabase query failed:', error);
+        console.error('[UNIFIED-DB] âŒ Supabase query failed:', error);
         recordFailure('supabase');
 
         // Try Azure as fallback
         if (azureClient && isProviderAvailable('azure')) {
-          console.warn('[UNIFIED-DB] 🔄 Failing over to Azure PostgreSQL...');
+          console.warn('[UNIFIED-DB] ðŸ”„ Failing over to Azure PostgreSQL...');
           try {
             const result = await withTimeout(operation(azureClient), OPERATION_TIMEOUT);
             recordSuccess('azure');
             return result;
           } catch (azureError) {
-            console.error('[UNIFIED-DB] ❌ Azure query also failed:', azureError);
+            console.error('[UNIFIED-DB] âŒ Azure query also failed:', azureError);
             recordFailure('azure');
             throw azureError;
           }
@@ -264,13 +264,13 @@ class UnifiedDatabaseClient {
 
     // Supabase unavailable, try Azure directly
     if (azureClient && isProviderAvailable('azure')) {
-      console.warn('[UNIFIED-DB] ⚠️ Using Azure PostgreSQL (Supabase circuit open)');
+      console.warn('[UNIFIED-DB] âš ï¸ Using Azure PostgreSQL (Supabase circuit open)');
       try {
         const result = await withTimeout(operation(azureClient), OPERATION_TIMEOUT);
         recordSuccess('azure');
         return result;
       } catch (error) {
-        console.error('[UNIFIED-DB] ❌ Azure query failed:', error);
+        console.error('[UNIFIED-DB] âŒ Azure query failed:', error);
         recordFailure('azure');
         throw error;
       }
@@ -465,16 +465,16 @@ export const db = new UnifiedDatabaseClient();
 
 // Log initialization
 console.log('[UNIFIED-DB] ========================================');
-console.log('[UNIFIED-DB] 🚀 Unified Database Client initialized');
+console.log('[UNIFIED-DB] ðŸš€ Unified Database Client initialized');
 console.log('[UNIFIED-DB] ========================================');
 console.log(
-  '[UNIFIED-DB] ✅ Primary: Supabase PostgreSQL',
+  '[UNIFIED-DB] [OK] Primary: Supabase PostgreSQL',
   supabaseClient ? '(available)' : '(unavailable)'
 );
 console.log(
-  '[UNIFIED-DB] ✅ Backup: Azure PostgreSQL',
+  '[UNIFIED-DB] [OK] Backup: Azure PostgreSQL',
   azureClient ? '(available)' : '(unavailable)'
 );
-console.log('[UNIFIED-DB] ⚡ Automatic failover: ENABLED');
-console.log('[UNIFIED-DB] 🔄 Circuit breaker: ENABLED');
+console.log('[UNIFIED-DB] âš¡ Automatic failover: ENABLED');
+console.log('[UNIFIED-DB] ðŸ”„ Circuit breaker: ENABLED');
 console.log('[UNIFIED-DB] ========================================');

@@ -1,22 +1,23 @@
-/**
- * UNIFIED REDIS CLIENT
- *
- * Single entry point for all Redis operations with automatic failover.
- *
- * Priority Chain:
- * 1. Upstash Redis (Primary - FREE 10K/day)
- * 2. Azure Cache for Redis (Backup - Unlimited from $100 credit)
- * 3. Mock Redis (Development fallback)
- *
- * Features:
- * - Automatic failover (Upstash → Azure → Mock)
- * - Zero breaking changes (drop-in replacement)
- * - Comprehensive error handling
- * - Detailed logging for debugging
- * - Production-safe (never silent failures)
- *
- * ⚠️ IMPORTANT: This file does NOT modify any existing code.
- * It's a NEW implementation that will be integrated later.
+﻿/**
+ * Unified Redis Client
+ * 
+ * Provides a single entry point for all Redis operations with automatic failover.
+ * Implements the circuit breaker pattern for resilience.
+ * 
+ * Architecture:
+ * - Primary: Upstash Redis (serverless, edge-compatible)
+ * - Backup: Azure Cache for Redis (traditional, high-capacity)
+ * - Fallback: Mock implementation (development only)
+ * 
+ * Key Features:
+ * - Automatic provider failover with circuit breaker
+ * - Zero breaking changes (drop-in replacement for existing code)
+ * - Comprehensive error handling and recovery
+ * - Detailed logging for debugging and monitoring
+ * - Production-safe (graceful degradation, never silent failures)
+ * 
+ * This module provides a unified interface that's compatible with both
+ * Upstash and IORedis APIs, allowing seamless switching between providers.
  */
 
 import { Redis as UpstashRedis } from '@upstash/redis';
@@ -81,14 +82,14 @@ class UnifiedRedis implements UnifiedRedisClient {
     try {
       this.initialize();
     } catch (error) {
-      console.error('[UNIFIED-REDIS] 🚨 Construction failed:', error);
-      // Set to mock mode (safe fallback)
+      console.error('[UNIFIED-REDIS] Construction failed:', error);
+      // Set to mock mode as safe fallback
       this.activeProvider = 'mock';
 
-      // In production build, this is CRITICAL
+      // Log critical warning in production
       if (process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV === 'production') {
-        console.error('[UNIFIED-REDIS] 🔴 PRODUCTION BUILD WITH NO REDIS!');
-        console.error('[UNIFIED-REDIS] 🔴 This will cause issues! Check configuration!');
+        console.error('[UNIFIED-REDIS] CRITICAL: Production build with no Redis connection!');
+        console.error('[UNIFIED-REDIS] This will cause issues. Check configuration immediately.');
       }
     }
   }
@@ -97,7 +98,7 @@ class UnifiedRedis implements UnifiedRedisClient {
    * Initialize Redis clients in priority order
    */
   private initialize(): void {
-    console.log('[UNIFIED-REDIS] 🚀 Initializing unified Redis client...');
+    console.log('[UNIFIED-REDIS] Initializing unified Redis client...');
 
     // Try to create Upstash client (PRIMARY)
     this.upstashClient = this.createUpstashClient();
@@ -108,17 +109,17 @@ class UnifiedRedis implements UnifiedRedisClient {
     // Set active provider
     if (this.upstashClient) {
       this.activeProvider = 'upstash';
-      console.log('[UNIFIED-REDIS] ✅ Primary: Upstash Redis (FREE)');
+      console.log('[UNIFIED-REDIS] [OK] Primary: Upstash Redis (FREE)');
     } else if (this.azureClient) {
       this.activeProvider = 'azure';
-      console.log('[UNIFIED-REDIS] ⚠️ Primary unavailable, using Azure');
+      console.log('[UNIFIED-REDIS] âš ï¸ Primary unavailable, using Azure');
     } else {
       this.activeProvider = 'mock';
-      console.log('[UNIFIED-REDIS] ⚠️ No Redis available, using Mock (dev only)');
+      console.log('[UNIFIED-REDIS] âš ï¸ No Redis available, using Mock (dev only)');
     }
 
     if (this.azureClient) {
-      console.log('[UNIFIED-REDIS] ✅ Backup: Azure Cache for Redis ($100 credit)');
+      console.log('[UNIFIED-REDIS] [OK] Backup: Azure Cache for Redis ($100 credit)');
     }
   }
 
@@ -130,7 +131,7 @@ class UnifiedRedis implements UnifiedRedisClient {
     const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
 
     if (!url || !token) {
-      console.log('[UNIFIED-REDIS] ⚠️ Upstash not configured (missing URL or TOKEN)');
+      console.log('[UNIFIED-REDIS] âš ï¸ Upstash not configured (missing URL or TOKEN)');
       return null;
     }
 
@@ -140,10 +141,10 @@ class UnifiedRedis implements UnifiedRedisClient {
         token,
       });
 
-      console.log('[UNIFIED-REDIS] ✅ Upstash client created successfully');
+      console.log('[UNIFIED-REDIS] [OK] Upstash client created successfully');
       return client;
     } catch (error) {
-      console.error('[UNIFIED-REDIS] ❌ Failed to create Upstash client:', error);
+      console.error('[UNIFIED-REDIS] âŒ Failed to create Upstash client:', error);
       return null;
     }
   }
@@ -155,7 +156,7 @@ class UnifiedRedis implements UnifiedRedisClient {
     const url = process.env.AZURE_REDIS_URL;
 
     if (!url) {
-      console.log('[UNIFIED-REDIS] ⚠️ Azure Redis not configured (missing AZURE_REDIS_URL)');
+      console.log('[UNIFIED-REDIS] âš ï¸ Azure Redis not configured (missing AZURE_REDIS_URL)');
       return null;
     }
 
@@ -179,7 +180,7 @@ class UnifiedRedis implements UnifiedRedisClient {
           port = parseInt(azureMatch[2]);
           password = azureMatch[3];
         } else {
-          console.error('[UNIFIED-REDIS] ❌ Invalid AZURE_REDIS_URL format');
+          console.error('[UNIFIED-REDIS] âŒ Invalid AZURE_REDIS_URL format');
           return null;
         }
       }
@@ -200,7 +201,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         lazyConnect: false,
         retryStrategy: (times: number) => {
           if (times > 2) {
-            console.error('[UNIFIED-REDIS] ❌ Azure connection failed after 2 retries');
+            console.error('[UNIFIED-REDIS] âŒ Azure connection failed after 2 retries');
             return null;
           }
           return Math.min(times * 50, 2000);
@@ -209,18 +210,18 @@ class UnifiedRedis implements UnifiedRedisClient {
 
       // Event handlers
       client.on('error', (err) => {
-        console.error('[UNIFIED-REDIS] ❌ Azure Redis error:', err.message);
+        console.error('[UNIFIED-REDIS] âŒ Azure Redis error:', err.message);
         this.recordFailure('azure');
       });
 
       client.on('connect', () => {
-        console.log('[UNIFIED-REDIS] ✅ Azure Redis connected');
+        console.log('[UNIFIED-REDIS] [OK] Azure Redis connected');
         this.resetFailures('azure');
       });
 
       return client;
     } catch (error) {
-      console.error('[UNIFIED-REDIS] ❌ Failed to create Azure client:', error);
+      console.error('[UNIFIED-REDIS] âŒ Failed to create Azure client:', error);
       return null;
     }
   }
@@ -234,7 +235,7 @@ class UnifiedRedis implements UnifiedRedisClient {
 
     if (this.failures[provider] >= this.MAX_FAILURES) {
       console.error(
-        `[UNIFIED-REDIS] 🚨 ${provider.toUpperCase()} circuit breaker opened (${this.failures[provider]} failures)`
+        `[UNIFIED-REDIS] [CRITICAL] ${provider.toUpperCase()} circuit breaker opened (${this.failures[provider]} failures)`
       );
     }
   }
@@ -263,7 +264,7 @@ class UnifiedRedis implements UnifiedRedisClient {
     const timeSinceLastFailure = Date.now() - lastFailure;
     if (timeSinceLastFailure > this.FAILURE_RESET_TIME) {
       console.log(
-        `[UNIFIED-REDIS] ♻️ ${provider.toUpperCase()} circuit breaker reset (1 min passed)`
+        `[UNIFIED-REDIS] [RESET] ${provider.toUpperCase()} circuit breaker reset (1 min passed)`
       );
       this.resetFailures(provider);
       return true;
@@ -287,7 +288,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('upstash');
         return value;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Upstash GET failed for key "${key}":`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Upstash GET failed for key "${key}":`, error);
         this.recordFailure('upstash');
       }
     }
@@ -307,14 +308,14 @@ class UnifiedRedis implements UnifiedRedisClient {
           return value;
         }
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Azure GET failed for key "${key}":`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Azure GET failed for key "${key}":`, error);
         this.recordFailure('azure');
       }
     }
 
     // Both failed - return null (development) or throw (production)
     if (process.env.NODE_ENV === 'production') {
-      console.error(`[UNIFIED-REDIS] 🚨 All Redis providers failed for GET "${key}"`);
+      console.error(`[UNIFIED-REDIS] [CRITICAL] All Redis providers failed for GET "${key}"`);
     }
 
     return null;
@@ -338,7 +339,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('upstash');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Upstash SET failed for key "${key}":`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Upstash SET failed for key "${key}":`, error);
         this.recordFailure('upstash');
       }
     }
@@ -355,14 +356,14 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('azure');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Azure SET failed for key "${key}":`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Azure SET failed for key "${key}":`, error);
         this.recordFailure('azure');
       }
     }
 
     // Both failed
     if (process.env.NODE_ENV === 'production') {
-      console.error(`[UNIFIED-REDIS] 🚨 All Redis providers failed for SET "${key}"`);
+      console.error(`[UNIFIED-REDIS] [CRITICAL] All Redis providers failed for SET "${key}"`);
       throw new Error('Redis unavailable');
     }
 
@@ -382,7 +383,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('upstash');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Upstash DEL failed:`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Upstash DEL failed:`, error);
         this.recordFailure('upstash');
       }
     }
@@ -394,7 +395,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('azure');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Azure DEL failed:`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Azure DEL failed:`, error);
         this.recordFailure('azure');
       }
     }
@@ -413,7 +414,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('upstash');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Upstash INCR failed for key "${key}":`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Upstash INCR failed for key "${key}":`, error);
         this.recordFailure('upstash');
       }
     }
@@ -425,7 +426,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('azure');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Azure INCR failed for key "${key}":`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Azure INCR failed for key "${key}":`, error);
         this.recordFailure('azure');
       }
     }
@@ -444,7 +445,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('upstash');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Upstash EXPIRE failed for key "${key}":`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Upstash EXPIRE failed for key "${key}":`, error);
         this.recordFailure('upstash');
       }
     }
@@ -456,7 +457,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('azure');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Azure EXPIRE failed for key "${key}":`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Azure EXPIRE failed for key "${key}":`, error);
         this.recordFailure('azure');
       }
     }
@@ -475,7 +476,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('upstash');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Upstash TTL failed for key "${key}":`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Upstash TTL failed for key "${key}":`, error);
         this.recordFailure('upstash');
       }
     }
@@ -487,7 +488,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('azure');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Azure TTL failed for key "${key}":`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Azure TTL failed for key "${key}":`, error);
         this.recordFailure('azure');
       }
     }
@@ -506,7 +507,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('upstash');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Upstash EXISTS failed for key "${key}":`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Upstash EXISTS failed for key "${key}":`, error);
         this.recordFailure('upstash');
       }
     }
@@ -518,7 +519,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('azure');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Azure EXISTS failed for key "${key}":`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Azure EXISTS failed for key "${key}":`, error);
         this.recordFailure('azure');
       }
     }
@@ -539,7 +540,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('upstash');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Upstash SETEX failed for key "${key}":`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Upstash SETEX failed for key "${key}":`, error);
         this.recordFailure('upstash');
       }
     }
@@ -551,7 +552,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('azure');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Azure SETEX failed for key "${key}":`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Azure SETEX failed for key "${key}":`, error);
         this.recordFailure('azure');
       }
     }
@@ -570,7 +571,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('upstash');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Upstash KEYS failed for pattern "${pattern}":`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Upstash KEYS failed for pattern "${pattern}":`, error);
         this.recordFailure('upstash');
       }
     }
@@ -582,7 +583,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('azure');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Azure KEYS failed for pattern "${pattern}":`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Azure KEYS failed for pattern "${pattern}":`, error);
         this.recordFailure('azure');
       }
     }
@@ -603,7 +604,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('upstash');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Upstash EVAL failed:`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Upstash EVAL failed:`, error);
         this.recordFailure('upstash');
       }
     }
@@ -616,7 +617,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('azure');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Azure EVAL failed:`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Azure EVAL failed:`, error);
         this.recordFailure('azure');
       }
     }
@@ -639,7 +640,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('upstash');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Upstash SADD failed:`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Upstash SADD failed:`, error);
         this.recordFailure('upstash');
       }
     }
@@ -651,7 +652,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('azure');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Azure SADD failed:`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Azure SADD failed:`, error);
         this.recordFailure('azure');
       }
     }
@@ -670,7 +671,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('upstash');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Upstash SREM failed:`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Upstash SREM failed:`, error);
         this.recordFailure('upstash');
       }
     }
@@ -682,7 +683,7 @@ class UnifiedRedis implements UnifiedRedisClient {
         this.resetFailures('azure');
         return result;
       } catch (error) {
-        console.warn(`[UNIFIED-REDIS] ⚠️ Azure SREM failed:`, error);
+        console.warn(`[UNIFIED-REDIS] âš ï¸ Azure SREM failed:`, error);
         this.recordFailure('azure');
       }
     }
@@ -763,7 +764,7 @@ class UnifiedRedis implements UnifiedRedisClient {
 /**
  * Singleton instance of unified Redis client
  *
- * ⚠️ NOTE: This is NOT yet integrated with existing code.
+ * âš ï¸ NOTE: This is NOT yet integrated with existing code.
  * It's ready for testing and integration in Phase 2.
  */
 export const unifiedRedis = new UnifiedRedis();
